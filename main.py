@@ -60,7 +60,7 @@ class TransparentWindow(QMainWindow):
         # <MainWindow Properties>
         self.setFixedSize(MAIN_WIDTH, MAIN_HEIGHT)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.move_to_topleft()
+        self.move_to_topright()
         self.setWindowOpacity(0.3)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
         # </MainWindow Properties>
@@ -74,11 +74,11 @@ class TransparentWindow(QMainWindow):
         self.timer.timeout.connect(lambda: self.progress_bar.add_sec(1))
         self.timer.start()
 
-    def move_to_topleft(self):
+    def move_to_topright(self):
         """Move main window to top left."""
         qr = self.frameGeometry()
         cp = QDesktopWidget().availableGeometry().topRight()
-        qr.moveCenter(cp)
+        qr.moveTopRight(cp)
         self.move(qr.topLeft())
 
     def mousePressEvent(self, event):
