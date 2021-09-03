@@ -4,13 +4,15 @@ import sys
 
 # Third party imports
 import qdarkstyle
-from PySide2.QtGui import QIcon, QPixmap
 from PySide2.QtCore import QPoint, Qt, QTimer
-from PySide2.QtWidgets import (
-    QApplication, QDesktopWidget, QMainWindow, QProgressBar)
+from PySide2.QtGui import QGuiApplication, QIcon, QPixmap
+from PySide2.QtWidgets import QApplication, QMainWindow, QProgressBar
 
-MAIN_WIDTH = 200
-MAIN_HEIGHT = 60
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # enable highdpi scaling
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)  # use highdpi icons
+
+MAIN_WIDTH = 100
+MAIN_HEIGHT = 30
 
 
 class TimerProgressBar(QProgressBar):
@@ -54,13 +56,13 @@ class TransparentWindow(QMainWindow):
         super().__init__()
 
         icon = QIcon()
-        icon.addPixmap(QPixmap('timer.ico'), QIcon.Normal, QIcon.Off)
+        icon.addPixmap(QPixmap("timer.ico"), QIcon.Normal, QIcon.Off)
         self.setWindowIcon(icon)
 
         # <MainWindow Properties>
         self.setFixedSize(MAIN_WIDTH, MAIN_HEIGHT)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.move_to_topright()
+        self.move_window()
         self.setWindowOpacity(0.3)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
         # </MainWindow Properties>
@@ -74,12 +76,13 @@ class TransparentWindow(QMainWindow):
         self.timer.timeout.connect(lambda: self.progress_bar.add_sec(1))
         self.timer.start()
 
-    def move_to_topright(self):
+    def move_window(self):
         """Move main window to top left."""
         qr = self.frameGeometry()
-        cp = QDesktopWidget().availableGeometry().topRight()
-        qr.moveTopRight(cp)
-        self.move(qr.topLeft())
+        screen = QGuiApplication.primaryScreen()
+        cp = screen.availableGeometry().bottomRight()
+        qr.moveBottomRight(cp)
+        self.move(qr.topLeft() - QPoint(42, 3))
 
     def mousePressEvent(self, event):
         """Save mouse position."""
@@ -106,9 +109,9 @@ class TransparentWindow(QMainWindow):
                 self.progress_bar.set_timer(5)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = QApplication(sys.argv)
-    app.setStyleSheet(qdarkstyle.load_stylesheet())
+    app.setStyleSheet(qdarkstyle.load_stylesheet(pyside=True))
 
     window = TransparentWindow()
     window.show()
