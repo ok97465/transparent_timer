@@ -6,7 +6,14 @@ import sys
 import qdarkstyle
 from PySide2.QtCore import QPoint, Qt, QTimer
 from PySide2.QtGui import QGuiApplication, QIcon, QPixmap
-from PySide2.QtWidgets import QApplication, QMainWindow, QProgressBar
+from PySide2.QtWidgets import (
+    QAction,
+    QApplication,
+    QMainWindow,
+    QMenu,
+    QProgressBar,
+    QSystemTrayIcon,
+)
 
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # enable highdpi scaling
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)  # use highdpi icons
@@ -55,13 +62,9 @@ class TransparentWindow(QMainWindow):
         """."""
         super().__init__()
 
-        icon = QIcon()
-        icon.addPixmap(QPixmap("timer.ico"), QIcon.Normal, QIcon.Off)
-        self.setWindowIcon(icon)
-
         # <MainWindow Properties>
         self.setFixedSize(MAIN_WIDTH, MAIN_HEIGHT)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.move_window()
         self.setWindowOpacity(0.3)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
@@ -108,11 +111,51 @@ class TransparentWindow(QMainWindow):
             elif key == Qt.Key_R:
                 self.progress_bar.set_timer(5)
 
+    def closeEvent(self, event):
+        """Redefine close event."""
+        self.hide()
+        event.ignore()
+
+
+class TrayIcon(QSystemTrayIcon):
+    """Tray Icon을 생성한다."""
+
+    def __init__(self, app, window):
+        """Init."""
+        super().__init__()
+
+        self.app = app
+        self.window = window
+
+        icon = QIcon()
+        icon.addPixmap(QPixmap("timer.ico"), QIcon.Normal, QIcon.Off)
+        self.setIcon(icon)
+        self.window.show()
+
+        self.menu = QMenu()
+        act_show = QAction("show", self)
+        act_show.triggered.connect(self.window.show)
+
+        act_hide = QAction("hide", self)
+        act_hide.triggered.connect(self.window.hide)
+
+        act_quit = QAction("quit", self)
+        act_quit.triggered.connect(self.app.quit)
+
+        self.menu.addAction(act_show)
+        self.menu.addAction(act_hide)
+        self.menu.addAction(act_quit)
+
+        self.setContextMenu(self.menu)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     app.setStyleSheet(qdarkstyle.load_stylesheet(pyside=True))
 
     window = TransparentWindow()
-    window.show()
+    tray = TrayIcon(app, window)
+    tray.setVisible(True)
+
     sys.exit(app.exec_())
