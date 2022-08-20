@@ -4,9 +4,9 @@ import sys
 
 # Third party imports
 import qdarkstyle
-from PySide2.QtCore import QPoint, Qt, QTimer, Slot
-from PySide2.QtGui import QGuiApplication, QIcon, QPixmap
-from PySide2.QtWidgets import (
+from PyQt5.QtCore import QPoint, Qt, QTimer, pyqtSlot
+from PyQt5.QtGui import QGuiApplication, QIcon, QPixmap
+from PyQt5.QtWidgets import (
     QAction,
     QApplication,
     QMainWindow,
@@ -150,7 +150,7 @@ class TrayIcon(QSystemTrayIcon):
 
         self.activated.connect(self.onTrayIconActivated)
 
-    @Slot(QSystemTrayIcon.ActivationReason)
+    @pyqtSlot(QSystemTrayIcon.ActivationReason)
     def onTrayIconActivated(self, reason):
         """Tray icon 클릭 시 동작을 정의한다."""
         if reason == QSystemTrayIcon.Trigger:
@@ -163,7 +163,7 @@ class TrayIcon(QSystemTrayIcon):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
-    app.setStyleSheet(qdarkstyle.load_stylesheet(pyside=True))
+    app.setStyleSheet(qdarkstyle.load_stylesheet())
 
     window = TransparentWindow()
     tray = TrayIcon(app, window)
