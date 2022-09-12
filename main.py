@@ -1,10 +1,14 @@
 """Transparent timer."""
 # Standard library imports
 import sys
+import sqlite3
+import argparse
+from datetime import datetime
+from typing import Literal
 
 # Third party imports
 import qdarkstyle
-from PyQt5.QtCore import QPoint, Qt, QTimer, pyqtSlot
+from PyQt5.QtCore import QPoint, Qt, QTimer, pyqtSlot, pyqtSignal
 from PyQt5.QtGui import QGuiApplication, QIcon, QPixmap
 from PyQt5.QtWidgets import (
     QAction,
@@ -13,17 +17,23 @@ from PyQt5.QtWidgets import (
     QMenu,
     QProgressBar,
     QSystemTrayIcon,
+    QMessageBox,
+    QPushButton,
+    QWidget,
+    QHBoxLayout,
+    QLCDNumber,
 )
 
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # enable highdpi scaling
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)  # use highdpi icons
 
-MAIN_WIDTH = 100
-MAIN_HEIGHT = 30
+TIMER_TYPE = Literal["LongRest", "ShortRest", "Work"]
 
 
 class TimerProgressBar(QProgressBar):
     """Progressbar for Timer."""
+
+    sig_timer_end = pyqtSignal()
 
     def __init__(self, parent):
         """."""
@@ -53,31 +63,114 @@ class TimerProgressBar(QProgressBar):
         if self.timer_cur < self.timer_req:
             self.timer_cur += val
             self.setValue(self.timer_cur)
+            if self.timer_cur == self.timer_req:
+                self.sig_timer_end.emit()
+
+
+class WorkDoneMessage(QMessageBox):
+    """."""
+
+    def __init__(
+        self, title: str, text: str, btn_infos: dict[str, QMessageBox.ButtonRole]
+    ):
+        """."""
+        super().__init__()
+        self.setWindowTitle(title)
+        self.setText(text)
+        self.setIcon(QMessageBox.Question)
+        for txt, role in btn_infos.items():
+            self.addButton(QPushButton(txt), role)
+
+    def get_role_clicked(self) -> QMessageBox.ButtonRole:
+        """Get the role of button clicked."""
+        role_clicked = self.buttonRole(self.clickedButton())
+        return role_clicked
 
 
 class TransparentWindow(QMainWindow):
     """Transparent window."""
 
-    def __init__(self):
+    def __init__(self, path_db: str):
         """."""
         super().__init__()
 
+        # Setup dB
+        self.path_db = path_db
+        self.open_db()
+        self.work_info: tuple[str, str] = ("", "")
+        self.n_work: int = self.read_n_work_today()
+
         # <MainWindow Properties>
-        self.setFixedSize(MAIN_WIDTH, MAIN_HEIGHT)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.move_window()
         self.setWindowOpacity(0.3)
         self.setAttribute(Qt.WA_NoSystemBackground, True)
         # </MainWindow Properties>
         self.progress_bar = TimerProgressBar(self)
-        self.setCentralWidget(self.progress_bar)
+        self.progress_bar.sig_timer_end.connect(self.handle_timer_end_event)
+        self.lcd = QLCDNumber(self)
+        self.lcd.setDigitCount(2)
+        self.lcd.display(self.n_work)
 
+        self.setFixedSize(133, 30)
+        self.progress_bar.setFixedSize(100, 30)
+        self.lcd.setFixedSize(30, 30)
+
+        # Layout
+        widget = QWidget(self)
+        widget.setContentsMargins(0, 0, 0, 0)
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 3, 0)
+        layout.addWidget(self.progress_bar)
+        layout.addWidget(self.lcd)
+        widget.setLayout(layout)
+        self.setCentralWidget(widget)
+
+        # For save position for mouseMoveEvent
         self.old_pos = self.pos()
 
+        self.timer_type: TIMER_TYPE = "ShortRest"
         self.timer = QTimer(self)
         self.timer.setInterval(1000)
         self.timer.timeout.connect(lambda: self.progress_bar.add_sec(1))
         self.timer.start()
+
+    def open_db(self):
+        """Create DB."""
+        conn = sqlite3.connect(self.path_db)
+        cur = conn.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS WorkingHistory(Date text,Time text);")
+        cur.close()
+        conn.commit()
+        conn.close()
+
+    def read_n_work_today(self) -> int:
+        """Read the number of work today."""
+        conn = sqlite3.connect(self.path_db)
+        cur = conn.cursor()
+
+        date = str(datetime.today().date())
+        cur.execute(f"SELECT * FROM WorkingHistory WHERE Date='{date}'")
+        rows = cur.fetchall()
+        ret = len(rows)
+
+        cur.close()
+        conn.commit()
+        conn.close()
+
+        return ret
+
+    def insert_workhistory(self):
+        """Insert workhistory."""
+        conn = sqlite3.connect(self.path_db)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO WorkingHistory(Date,Time)VALUES(?,?);", self.work_info)
+        cur.close()
+        conn.commit()
+        conn.close()
+
+        # Update GUI
+        self.n_work += 1
 
     def move_window(self):
         """Move main window to top left."""
@@ -85,7 +178,8 @@ class TransparentWindow(QMainWindow):
         screen = QGuiApplication.primaryScreen()
         cp = screen.availableGeometry().bottomRight()
         qr.moveBottomRight(cp)
-        self.move(qr.topLeft() - QPoint(42, 3))
+        # self.move(qr.topLeft() - QPoint(42, 3))
+        self.move(QPoint(qr.left() - 1921, qr.bottom()))
 
     def mousePressEvent(self, event):
         """Save mouse position."""
@@ -104,17 +198,77 @@ class TransparentWindow(QMainWindow):
 
         if shift_pressed:
             if key == Qt.Key_R:
-                self.progress_bar.set_timer(15)
+                self.set_timer("LongRest")
         else:
             if key == Qt.Key_W:
-                self.progress_bar.set_timer(25)
+                self.set_timer("Work")
             elif key == Qt.Key_R:
-                self.progress_bar.set_timer(5)
+                self.set_timer("ShortRest")
+
+    def set_timer(self, timer_type: TIMER_TYPE):
+        """Set timer."""
+        self.timer_type = timer_type
+        if timer_type == "LongRest":
+            self.progress_bar.set_timer(15)
+        elif timer_type == "ShortRest":
+            self.progress_bar.set_timer(5)
+        elif timer_type == "Work":
+            self.work_info = (
+                str(datetime.today().date()),
+                str(datetime.today().time()),
+            )
+            self.progress_bar.set_timer(25)
+
+        self.lcd.display(self.n_work)
 
     def closeEvent(self, event):
         """Redefine close event."""
         self.hide()
         event.ignore()
+
+    def handle_timer_end_event(self):
+        """Handle timer end event."""
+        self.progress_bar.setStyleSheet(
+            "QProgressBar {color: green;}"
+            "QProgressBar::chunk {background-color: red;}"
+        )
+        if self.timer_type == "Work":
+            msgbox = WorkDoneMessage(
+                "업무 완료",
+                "업무 집중이 끝났습니다.",
+                {
+                    "휴식": QMessageBox.ApplyRole,
+                    "새로운 업무": QMessageBox.AcceptRole,
+                    "업무 재시작": QMessageBox.NoRole,
+                },
+            )
+            msgbox.exec()
+            role_clicked = msgbox.get_role_clicked()
+            if role_clicked == QMessageBox.ApplyRole:
+                self.insert_workhistory()
+                self.set_timer("ShortRest")
+            elif role_clicked == QMessageBox.AcceptRole:
+                self.insert_workhistory()
+                self.set_timer("Work")
+            elif role_clicked == QMessageBox.NoRole:
+                self.set_timer("Work")
+        else:
+            msgbox = WorkDoneMessage(
+                "휴식 완료",
+                "휴식이 끝났습니다.",
+                {
+                    "업무 집중": QMessageBox.AcceptRole,
+                    "휴식 재시작": QMessageBox.NoRole,
+                },
+            )
+            msgbox.exec()
+            role_clicked = msgbox.get_role_clicked()
+            if role_clicked == QMessageBox.AcceptRole:
+                self.set_timer("Work")
+            elif role_clicked == QMessageBox.NoRole:
+                self.set_timer("ShortRest")
+
+        self.progress_bar.setStyleSheet("")
 
 
 class TrayIcon(QSystemTrayIcon):
@@ -160,12 +314,28 @@ class TrayIcon(QSystemTrayIcon):
                 self.window.hide()
 
 
+def parse_arguments() -> argparse.Namespace:
+    """Parse arguments."""
+    parser = argparse.ArgumentParser(description="Transparent Timer like Pomodoro")
+    parser.add_argument(
+        "--path_db",
+        help="Path of dB of working history",
+        type=str,
+        default="workhistory.db",
+    )
+    args = parser.parse_args()
+
+    return args
+
+
 if __name__ == "__main__":
+    args = parse_arguments()
+
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     app.setStyleSheet(qdarkstyle.load_stylesheet())
 
-    window = TransparentWindow()
+    window = TransparentWindow(args.path_db)
     tray = TrayIcon(app, window)
     tray.setVisible(True)
 
