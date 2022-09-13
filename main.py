@@ -54,6 +54,11 @@ class TimerProgressBar(QProgressBar):
         self.setMaximum(self.timer_req)
         self.setFormat(f"%p% of {val}min")
 
+    def set_tooltip(self):
+        """Set tooltip."""
+        diff  = max(self.timer_req - self.timer_cur, 0)
+        self.setToolTip(f"RemainTime: {diff // 60}min {diff % 60}sec")
+
     def add_sec(self, val: int):
         """Add second.
 
@@ -65,6 +70,7 @@ class TimerProgressBar(QProgressBar):
             self.setValue(self.timer_cur)
             if self.timer_cur == self.timer_req:
                 self.sig_timer_end.emit()
+        self.set_tooltip()
 
 
 class WorkDoneMessage(QMessageBox):
@@ -77,6 +83,7 @@ class WorkDoneMessage(QMessageBox):
         super().__init__()
         self.setWindowTitle(title)
         self.setText(text)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         self.setIcon(QMessageBox.Question)
         for txt, role in btn_infos.items():
             self.addButton(QPushButton(txt), role)
