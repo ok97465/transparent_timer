@@ -28,6 +28,7 @@ QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)  # enable highdpi sc
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)  # use highdpi icons
 
 TIMER_TYPE = Literal["LongRest", "ShortRest", "Work"]
+FRMAE_HEIGHT = 29
 
 
 class TimerProgressBar(QProgressBar):
@@ -93,6 +94,15 @@ class WorkDoneMessage(QMessageBox):
         role_clicked = self.buttonRole(self.clickedButton())
         return role_clicked
 
+    def keyPressEvent(self, event):
+        """Prevent key press."""
+        key = event.key()
+
+        if key in (Qt.Key_Escape, Qt.Key_Return, Qt.Key_Enter):
+            pass
+        else:
+            super().keyPressEvent(event)
+
 
 class TransparentWindow(QMainWindow):
     """Transparent window."""
@@ -117,17 +127,17 @@ class TransparentWindow(QMainWindow):
         self.progress_bar.sig_timer_end.connect(self.handle_timer_end_event)
         self.lcd = QLCDNumber(self)
         self.lcd.setDigitCount(2)
-        self.lcd.display(self.n_work)
+        self.lcd.display(f"{self.n_work:02d}")
 
-        self.setFixedSize(133, 30)
-        self.progress_bar.setFixedSize(100, 30)
-        self.lcd.setFixedSize(30, 30)
+        self.setFixedSize(140, FRMAE_HEIGHT)
+        self.progress_bar.setFixedSize(100, FRMAE_HEIGHT)
+        self.lcd.setFixedSize(40, FRMAE_HEIGHT)
 
         # Layout
         widget = QWidget(self)
         widget.setContentsMargins(0, 0, 0, 0)
         layout = QHBoxLayout()
-        layout.setContentsMargins(0, 0, 3, 0)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.progress_bar)
         layout.addWidget(self.lcd)
         widget.setLayout(layout)
@@ -186,7 +196,7 @@ class TransparentWindow(QMainWindow):
         cp = screen.availableGeometry().bottomRight()
         qr.moveBottomRight(cp)
         # self.move(qr.topLeft() - QPoint(42, 3))
-        self.move(QPoint(qr.left() - 1921, qr.bottom()))
+        self.move(QPoint(qr.left() - 1921, qr.bottom() - FRMAE_HEIGHT))
 
     def mousePressEvent(self, event):
         """Save mouse position."""
@@ -226,7 +236,7 @@ class TransparentWindow(QMainWindow):
             )
             self.progress_bar.set_timer(25)
 
-        self.lcd.display(self.n_work)
+        self.lcd.display(f"{self.n_work:02d}")
 
     def closeEvent(self, event):
         """Redefine close event."""
